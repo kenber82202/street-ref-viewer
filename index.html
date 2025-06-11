@@ -4,56 +4,33 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Random Image Navigator</title>
   <style>
     body {
       margin: 0; padding: 0;
-      background: #000;
-      color: #fff;
+      background: #000; color: #fff;
       font-family: sans-serif;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      height: 100vh;
-      overflow: hidden;
+      display: flex; justify-content: center; align-items: center;
+      height: 100vh; overflow: hidden;
     }
     img {
-      max-width: 90vw;
-      max-height: 90vh;
+      max-width: 90vw; max-height: 90vh;
       border: 3px solid #fff;
       border-radius: 8px;
     }
     button {
-      position: fixed;
-      bottom: 20px;
-      font-size: 3em;
-      padding: 0.1em 0.3em;
-      cursor: pointer;
-      border-radius: 5px;
-      border: none;
-      background: rgba(30,30,30,0.8);
-      color: #fff;
-      user-select: none;
-      transition: background 0.3s;
-      z-index: 1000;
-      touch-action: manipulation;
+      position: fixed; bottom: 20px;
+      font-size: 3em; padding: 0.1em 0.3em;
+      cursor: pointer; border-radius: 5px; border: none;
+      background: rgba(30,30,30,0.8); color: #fff;
+      user-select: none; z-index: 1000;
     }
-    button:disabled {
-      opacity: 0.3;
-      cursor: default;
-    }
-    button:hover:not(:disabled) {
-      background: rgba(70,70,70,0.9);
-    }
-    #backBtn {
-      left: 20px;
-    }
-    #forwardBtn {
-      right: 20px;
-    }
+    button:disabled { opacity: 0.3; cursor: default; }
+    button:hover:not(:disabled) { background: rgba(70,70,70,0.9); }
+    #backBtn { left: 20px; }
+    #forwardBtn { right: 20px; }
+    button { touch-action: manipulation; }
   </style>
 </head>
 <body>
@@ -63,14 +40,55 @@
 <button id="forwardBtn" disabled aria-label="Next image">&gt;</button>
 
 <script>
-const API_TOKEN = 'MLY|9928574010570605|8152b5143f1d2deb471cb1cba6198959';
 const CITIES = {
-  'Tokyo': [139.55, 35.50, 139.90, 35.80],
-  'Paris': [2.25, 48.80, 2.45, 48.90],
-  'New York': [-74.05, 40.70, -73.85, 40.85],
-  'Seoul': [126.90, 37.50, 127.10, 37.60],
-  'London': [-0.20, 51.45, 0.10, 51.55],
+  "Tokyo": [35.60, 35.75, 139.65, 139.80],
+  "Osaka": [34.65, 34.75, 135.45, 135.55],
+  "Kyoto": [35.00, 35.08, 135.72, 135.80],
+  "New York": [40.72, 40.78, -74.00, -73.95],
+  "Los Angeles": [34.04, 34.10, -118.27, -118.20],
+  "Paris": [48.85, 48.88, 2.33, 2.37],
+  "London": [51.50, 51.52, -0.13, -0.10],
+  "Berlin": [52.50, 52.52, 13.38, 13.42],
+  "Seoul": [37.55, 37.57, 126.98, 127.02],
+  "Singapore": [1.28, 1.30, 103.83, 103.85],
+  "Melbourne": [-37.82, -37.80, 144.96, 145.00],
+  "Hanoi": [21.01, 21.03, 105.83, 105.85],
+  "Mexico City": [19.42, 19.44, -99.15, -99.12],
+  "Delhi": [28.61, 28.63, 77.21, 77.24],
+  "Jakarta": [-6.21, -6.19, 106.82, 106.85],
+  "Cairo": [30.04, 30.06, 31.22, 31.25],
+  "Istanbul": [41.01, 41.03, 28.97, 29.00],
+  "Sydney": [-33.87, -33.85, 151.20, 151.22],
 };
+
+function getRandomCoord(bbox) {
+  const [latMin, latMax, lonMin, lonMax] = bbox;
+  const lat = Math.random() * (latMax - latMin) + latMin;
+  const lon = Math.random() * (lonMax - lonMin) + lonMin;
+  return [lat, lon];
+}
+
+function generateStreetViewUrl(lat, lon) {
+  const heading = Math.floor(Math.random() * 360);
+  const pitch = Math.floor(Math.random() * 20 - 10);
+  const fov = Math.floor(Math.random() * 20 + 70);
+  return `https://maps.googleapis.com/maps/api/streetview?size=800x600&location=${lat},${lon}&heading=${heading}&pitch=${pitch}&fov=${fov}&key=AIzaSyC-hQJVqEkgXsqTwf-Pm-Yg_L2gPIshBYE`;
+}
+
+async function preloadValidImageUrl(retries = 10) {
+  for (let attempt = 0; attempt < retries; attempt++) {
+    const cityKeys = Object.keys(CITIES);
+    const city = cityKeys[Math.floor(Math.random() * cityKeys.length)];
+    const [lat, lon] = getRandomCoord(CITIES[city]);
+    const url = generateStreetViewUrl(lat, lon);
+
+    try {
+      const res = await fetch(url, { method: 'HEAD' });
+      if (res.ok) return url;
+    } catch (err) {}
+  }
+  return null;
+}
 
 let links = [];
 let currentIndex = -1;
@@ -83,43 +101,28 @@ const imgElement = document.getElementById('mainImage');
 const backBtn = document.getElementById('backBtn');
 const forwardBtn = document.getElementById('forwardBtn');
 
-function getRandomCityBBox() {
-  const keys = Object.keys(CITIES);
-  const city = keys[Math.floor(Math.random() * keys.length)];
-  return CITIES[city];
-}
-
-async function fetchRandomImage() {
-  const bbox = getRandomCityBBox();
-  const url = `https://graph.mapillary.com/images?access_token=${API_TOKEN}&fields=thumb_1024_url&bbox=${bbox.join(',')}&is_pano=false&limit=1`;
-  const res = await fetch(url);
-  const data = await res.json();
-  return data.data?.[0]?.thumb_1024_url || null;
+function updateButtons() {
+  backBtn.disabled = historyStack.length === 0;
+  forwardBtn.disabled = forwardStack.length === 0;
 }
 
 async function preloadForwardImages() {
   forwardStack = [];
-  let preloadCount = 0;
-  while (preloadCount < maxPreload) {
-    const link = await fetchRandomImage();
+  while (forwardStack.length < maxPreload) {
+    const link = await preloadValidImageUrl();
     if (link && !links.includes(link)) {
       links.push(link);
       forwardStack.push(links.length - 1);
-      preloadCount++;
     }
   }
   updateButtons();
-}
-
-function updateButtons() {
-  backBtn.disabled = historyStack.length === 0;
-  forwardBtn.disabled = forwardStack.length === 0;
 }
 
 function showImage(index) {
   currentIndex = index;
   imgElement.src = links[currentIndex];
   imgElement.alt = `Image ${currentIndex + 1}`;
+  preloadForwardImages();
   updateButtons();
 }
 
@@ -132,30 +135,26 @@ backBtn.addEventListener('click', () => {
   }
 });
 
-forwardBtn.addEventListener('click', async () => {
+forwardBtn.addEventListener('click', () => {
   if (forwardStack.length > 0) {
     historyStack.push(currentIndex);
     if (historyStack.length > maxHistory) historyStack.shift();
     const nextIndex = forwardStack.shift();
     showImage(nextIndex);
-
-    // Start preloading next
-    const newLink = await fetchRandomImage();
-    if (newLink && !links.includes(newLink)) {
-      links.push(newLink);
-      forwardStack.push(links.length - 1);
-    }
-    updateButtons();
   }
 });
 
 (async () => {
-  await preloadForwardImages();
-  if (forwardStack.length > 0) {
-    showImage(forwardStack.shift());
-  } else {
-    imgElement.alt = "No images available.";
+  for (let i = 0; i < maxPreload; i++) {
+    const link = await preloadValidImageUrl();
+    if (link) links.push(link);
   }
+  if (links.length === 0) {
+    imgElement.alt = "Failed to load any images.";
+    return;
+  }
+  currentIndex = 0;
+  showImage(currentIndex);
 })();
 </script>
 
