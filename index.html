@@ -2,117 +2,183 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Random Street or Place Image</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>Random Image Navigator</title>
   <style>
-    body { margin: 0; background: black; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; }
-    img { max-width: 100vw; max-height: 90vh; object-fit: contain; }
-    .controls { margin-top: 10px; }
-    button { margin: 0 10px; padding: 10px 20px; font-size: 16px; }
+    body {
+      margin: 0; padding: 0;
+      background: #000; color: #fff;
+      font-family: sans-serif;
+      display: flex; justify-content: center; align-items: center;
+      height: 100vh; overflow: hidden;
+    }
+    img {
+      max-width: 90vw; max-height: 90vh;
+      border: 3px solid #fff; border-radius: 8px;
+    }
+    button {
+      position: fixed; bottom: 20px;
+      font-size: 3em; padding: 0.1em 0.3em;
+      cursor: pointer; border-radius: 5px;
+      border: none; background: rgba(30,30,30,0.8);
+      color: #fff; z-index: 1000; touch-action: manipulation;
+    }
+    button:disabled { opacity: 0.3; cursor: default; }
+    button:hover:not(:disabled) { background: rgba(70,70,70,0.9); }
+    #backBtn { left: 20px; }
+    #forwardBtn { right: 20px; }
   </style>
 </head>
 <body>
 
-  <img id="image" alt="Loading..." />
-  <div class="controls">
-    <button id="back">Back</button>
-    <button id="forward">Forward</button>
-  </div>
+<img id="mainImage" src="" alt="Random Image" />
+<button id="backBtn" disabled aria-label="Previous image">&lt;</button>
+<button id="forwardBtn" disabled aria-label="Next image">&gt;</button>
 
-  <script>
-    const API_KEY = "AIzaSyC-hQJVqEkgXsqTwf-Pm-Yg_L2gPIshBYE";
+<script>
+const API_KEY = 'AIzaSyC-hQJVqEkgXsqTwf-Pm-Yg_L2gPIshBYE'; // Replace with yours and restrict usage
 
-    const CITIES = {
-      'Tokyo': [35.60, 35.75, 139.65, 139.80],
-      'Osaka': [34.65, 34.75, 135.45, 135.55],
-      'Kyoto': [35.00, 35.08, 135.72, 135.80],
-      'New York': [40.72, 40.78, -74.00, -73.95],
-      'Paris': [48.85, 48.88, 2.33, 2.37],
-      'London': [51.50, 51.52, -0.13, -0.10],
-      'Berlin': [52.50, 52.52, 13.38, 13.42],
-      'Seoul': [37.55, 37.57, 126.98, 127.02],
-      'Singapore': [1.28, 1.30, 103.83, 103.85],
-    };
+const CITIES = {
+  'Tokyo': [35.60, 35.75, 139.65, 139.80],
+  'Osaka': [34.65, 34.75, 135.45, 135.55],
+  'Kyoto': [35.00, 35.08, 135.72, 135.80],
+  'New York': [40.72, 40.78, -74.00, -73.95],
+  'Paris': [48.85, 48.88, 2.33, 2.37],
+  'London': [51.50, 51.52, -0.13, -0.10],
+  'Berlin': [52.50, 52.52, 13.38, 13.42],
+  'Seoul': [37.55, 37.57, 126.98, 127.02],
+  'Singapore': [1.28, 1.30, 103.83, 103.85],
+  'Delhi': [28.61, 28.63, 77.21, 77.24],
+};
 
-    const links = [];
-    let currentIndex = 0;
+function randomCoords([latMin, latMax, lonMin, lonMax]) {
+  return [
+    (Math.random() * (latMax - latMin) + latMin).toFixed(6),
+    (Math.random() * (lonMax - lonMin) + lonMin).toFixed(6)
+  ];
+}
 
-    function randomCoords(bbox) {
-      const [latMin, latMax, lonMin, lonMax] = bbox;
-      const lat = (Math.random() * (latMax - latMin)) + latMin;
-      const lon = (Math.random() * (lonMax - lonMin)) + lonMin;
-      return [lat, lon];
-    }
-
-    async function isStreetViewAvailable(lat, lon) {
-      const url = `https://maps.googleapis.com/maps/api/streetview/metadata?location=${lat},${lon}&key=${API_KEY}`;
-      const res = await fetch(url);
-      const data = await res.json();
-      return data.status === "OK";
-    }
-
-    function makeStreetViewURL(lat, lon) {
+async function streetViewURL(retries = 10) {
+  for (let i = 0; i < retries; i++) {
+    const [city, bbox] = Object.entries(CITIES)[Math.floor(Math.random() * Object.keys(CITIES).length)];
+    const [lat, lon] = randomCoords(bbox);
+    const metaURL = `https://maps.googleapis.com/maps/api/streetview/metadata?location=${lat},${lon}&key=${API_KEY}`;
+    const metaRes = await fetch(metaURL).then(res => res.json());
+    if (metaRes.status === 'OK') {
       const heading = Math.floor(Math.random() * 360);
       const pitch = Math.floor(Math.random() * 20 - 10);
       const fov = Math.floor(Math.random() * 20 + 70);
       return `https://maps.googleapis.com/maps/api/streetview?size=1600x900&location=${lat},${lon}&heading=${heading}&pitch=${pitch}&fov=${fov}&key=${API_KEY}`;
     }
+  }
+  return null;
+}
 
-    async function getPlacePhotoURL(lat, lon) {
-      const nearbySearch = `https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=${lat},${lon}&radius=150&type=point_of_interest&key=${API_KEY}`;
-      const response = await fetch(`https://corsproxy.io/?${encodeURIComponent(nearbySearch)}`);
-      const data = await response.json();
-      const candidates = data.results?.filter(r => r.photos)?.map(r => r.photos[0].photo_reference);
-      if (!candidates || candidates.length === 0) return null;
-      const ref = candidates[Math.floor(Math.random() * candidates.length)];
-      return `https://maps.googleapis.com/maps/api/place/photo?maxwidth=1600&photoreference=${ref}&key=${API_KEY}`;
-    }
-
-    async function generateImageURL() {
-      for (let i = 0; i < 10; i++) {
-        const [city, bbox] = Object.entries(CITIES)[Math.floor(Math.random() * Object.keys(CITIES).length)];
-        const [lat, lon] = randomCoords(bbox);
-
-        if (Math.random() < 0.5) {
-          if (await isStreetViewAvailable(lat, lon)) {
-            return makeStreetViewURL(lat, lon);
-          }
-        } else {
-          const url = await getPlacePhotoURL(lat, lon);
-          if (url) return url;
-        }
+async function placePhotoURL(retries = 10) {
+  for (let i = 0; i < retries; i++) {
+    const [city, bbox] = Object.entries(CITIES)[Math.floor(Math.random() * Object.keys(CITIES).length)];
+    const [lat, lon] = randomCoords(bbox);
+    const placeURL = `https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=${lat},${lon}&radius=150&type=point_of_interest&key=${API_KEY}`;
+    const placeRes = await fetch(placeURL).then(res => res.json());
+    if (placeRes.results && placeRes.results.length > 0) {
+      const place = placeRes.results.find(p => p.photos && p.photos.length > 0);
+      if (place) {
+        const ref = place.photos[0].photo_reference;
+        return `https://maps.googleapis.com/maps/api/place/photo?maxwidth=1600&photoreference=${ref}&key=${API_KEY}`;
       }
-      return null;
     }
+  }
+  return null;
+}
 
-    async function preloadImages(n = 5) {
-      for (let i = 0; i < n; i++) {
-        const url = await generateImageURL();
-        if (url) links.push(url);
+async function generateImageURL() {
+  if (Math.random() < 0.5) {
+    const url = await streetViewURL();
+    if (url) return url;
+    return await placePhotoURL(); // fallback
+  } else {
+    const url = await placePhotoURL();
+    if (url) return url;
+    return await streetViewURL(); // fallback
+  }
+}
+
+// App state
+let links = [];
+let currentIndex = -1;
+let historyStack = [];
+let forwardStack = [];
+const maxHistory = 3;
+const maxPreload = 3;
+
+const imgElement = document.getElementById('mainImage');
+const backBtn = document.getElementById('backBtn');
+const forwardBtn = document.getElementById('forwardBtn');
+
+function updateButtons() {
+  backBtn.disabled = historyStack.length === 0;
+  forwardBtn.disabled = forwardStack.length === 0;
+}
+
+function showImage(index) {
+  currentIndex = index;
+  imgElement.src = links[currentIndex];
+  imgElement.alt = `Image ${currentIndex + 1} of ${links.length}`;
+  preloadForwardImages();
+  updateButtons();
+}
+
+backBtn.addEventListener('click', () => {
+  if (historyStack.length > 0) {
+    forwardStack.unshift(currentIndex);
+    if (forwardStack.length > maxPreload) forwardStack.pop();
+    const prevIndex = historyStack.pop();
+    showImage(prevIndex);
+  }
+});
+
+forwardBtn.addEventListener('click', () => {
+  if (forwardStack.length > 0) {
+    historyStack.push(currentIndex);
+    if (historyStack.length > maxHistory) historyStack.shift();
+    const nextIndex = forwardStack.shift();
+    showImage(nextIndex);
+  }
+});
+
+function preloadForwardImages() {
+  forwardStack = [];
+  for (let i = 0; i < maxPreload; i++) {
+    generateImageURL().then(url => {
+      if (url) {
+        links.push(url);
+        const index = links.length - 1;
+        const img = new Image();
+        img.onload = () => {
+          forwardStack.push(index);
+          updateButtons();
+        };
+        img.src = url;
       }
-      showImage(currentIndex);
-    }
-
-    function showImage(index) {
-      const img = document.getElementById("image");
-      if (!links.length) {
-        img.alt = "No images loaded";
-        return;
-      }
-      img.src = links[index];
-    }
-
-    document.getElementById("forward").addEventListener("click", () => {
-      currentIndex = (currentIndex + 1) % links.length;
-      showImage(currentIndex);
     });
+  }
+}
 
-    document.getElementById("back").addEventListener("click", () => {
-      currentIndex = (currentIndex - 1 + links.length) % links.length;
-      showImage(currentIndex);
-    });
-
-    preloadImages();
-  </script>
+(async () => {
+  // Preload 5 images on load
+  for (let i = 0; i < 5; i++) {
+    const url = await generateImageURL();
+    if (url) links.push(url);
+  }
+  if (links.length > 0) {
+    currentIndex = 0;
+    showImage(currentIndex);
+  } else {
+    imgElement.alt = "Failed to load any images.";
+  }
+})();
+</script>
 </body>
 </html>
