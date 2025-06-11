@@ -8,25 +8,43 @@
   <title>Random Image Navigator</title>
   <style>
     body {
-      margin: 0; padding: 0;
-      background: #000; color: #fff;
+      margin: 0;
+      padding: 0;
+      background: #000;
+      color: #fff;
       font-family: sans-serif;
-      display: flex; justify-content: center; align-items: center;
-      height: 100vh; overflow: hidden;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      overflow: hidden;
     }
     img {
-      max-width: 90vw; max-height: 90vh;
-      border: 3px solid #fff; border-radius: 8px;
+      max-width: 90vw;
+      max-height: 90vh;
+      border: 3px solid #fff;
+      border-radius: 8px;
     }
     button {
-      position: fixed; bottom: 20px;
-      font-size: 3em; padding: 0.1em 0.3em;
-      cursor: pointer; border-radius: 5px;
-      border: none; background: rgba(30,30,30,0.8);
-      color: #fff; z-index: 1000; touch-action: manipulation;
+      position: fixed;
+      bottom: 20px;
+      font-size: 3em;
+      padding: 0.1em 0.3em;
+      cursor: pointer;
+      border-radius: 5px;
+      border: none;
+      background: rgba(30,30,30,0.8);
+      color: #fff;
+      z-index: 1000;
+      touch-action: manipulation;
     }
-    button:disabled { opacity: 0.3; cursor: default; }
-    button:hover:not(:disabled) { background: rgba(70,70,70,0.9); }
+    button:disabled {
+      opacity: 0.3;
+      cursor: default;
+    }
+    button:hover:not(:disabled) {
+      background: rgba(70,70,70,0.9);
+    }
     #backBtn { left: 20px; }
     #forwardBtn { right: 20px; }
   </style>
@@ -38,8 +56,9 @@
 <button id="forwardBtn" disabled aria-label="Next image">&gt;</button>
 
 <script>
-const API_KEY = 'AIzaSyC-hQJVqEkgXsqTwf-Pm-Yg_L2gPIshBYE'; // Replace with yours and restrict usage
+const API_KEY = 'YOUR_GOOGLE_API_KEY'; // Replace with your API key
 
+// Global city dataset with tighter bounding boxes
 const CITIES = {
   'Tokyo': [35.60, 35.75, 139.65, 139.80],
   'Osaka': [34.65, 34.75, 135.45, 135.55],
@@ -54,58 +73,84 @@ const CITIES = {
 };
 
 function randomCoords([latMin, latMax, lonMin, lonMax]) {
-  return [
-    (Math.random() * (latMax - latMin) + latMin).toFixed(6),
-    (Math.random() * (lonMax - lonMin) + lonMin).toFixed(6)
-  ];
+  const lat = (Math.random() * (latMax - latMin) + latMin).toFixed(6);
+  const lon = (Math.random() * (lonMax - lonMin) + lonMin).toFixed(6);
+  return [lat, lon];
 }
 
+// Try to get a valid Street View URL with retries
 async function streetViewURL(retries = 10) {
   for (let i = 0; i < retries; i++) {
+    // Pick a random city and generate random coords
     const [city, bbox] = Object.entries(CITIES)[Math.floor(Math.random() * Object.keys(CITIES).length)];
     const [lat, lon] = randomCoords(bbox);
     const metaURL = `https://maps.googleapis.com/maps/api/streetview/metadata?location=${lat},${lon}&key=${API_KEY}`;
-    const metaRes = await fetch(metaURL).then(res => res.json());
-    if (metaRes.status === 'OK') {
-      const heading = Math.floor(Math.random() * 360);
-      const pitch = Math.floor(Math.random() * 20 - 10);
-      const fov = Math.floor(Math.random() * 20 + 70);
-      return `https://maps.googleapis.com/maps/api/streetview?size=1600x900&location=${lat},${lon}&heading=${heading}&pitch=${pitch}&fov=${fov}&key=${API_KEY}`;
+    try {
+      const metaRes = await fetch(metaURL);
+      const metaData = await metaRes.json();
+      if (metaData.status === 'OK') {
+        const heading = Math.floor(Math.random() * 360);
+        const pitch = Math.floor(Math.random() * 20 - 10); // -10 to 10
+        const fov = Math.floor(Math.random() * 20 + 70);     // 70 to 90
+        console.log(`Street View from ${city} at [${lat}, ${lon}] chosen.`);
+        return `https://maps.googleapis.com/maps/api/streetview?size=1600x900&location=${lat},${lon}&heading=${heading}&pitch=${pitch}&fov=${fov}&key=${API_KEY}`;
+      }
+    } catch (err) {
+      console.error("Street View error:", err);
     }
   }
   return null;
 }
 
+// Try to get a valid Place Photo URL with retries
 async function placePhotoURL(retries = 10) {
   for (let i = 0; i < retries; i++) {
     const [city, bbox] = Object.entries(CITIES)[Math.floor(Math.random() * Object.keys(CITIES).length)];
     const [lat, lon] = randomCoords(bbox);
     const placeURL = `https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=${lat},${lon}&radius=150&type=point_of_interest&key=${API_KEY}`;
-    const placeRes = await fetch(placeURL).then(res => res.json());
-    if (placeRes.results && placeRes.results.length > 0) {
-      const place = placeRes.results.find(p => p.photos && p.photos.length > 0);
-      if (place) {
-        const ref = place.photos[0].photo_reference;
-        return `https://maps.googleapis.com/maps/api/place/photo?maxwidth=1600&photoreference=${ref}&key=${API_KEY}`;
+    try {
+      const placeRes = await fetch(placeURL);
+      const placeData = await placeRes.json();
+      if (placeData.results && placeData.results.length > 0) {
+        // Look for a place with photos
+        const place = placeData.results.find(p => p.photos && p.photos.length > 0);
+        if (place) {
+          const photoRef = place.photos[0].photo_reference;
+          console.log(`Place Photo from ${city} at [${lat}, ${lon}] chosen.`);
+          return `https://maps.googleapis.com/maps/api/place/photo?maxwidth=1600&photoreference=${photoRef}&key=${API_KEY}`;
+        }
       }
+    } catch (err) {
+      console.error("Place Photo error:", err);
     }
   }
   return null;
 }
 
+// Generate one valid random image URL, with a 50/50 branch decision
 async function generateImageURL() {
-  if (Math.random() < 0.5) {
-    const url = await streetViewURL();
-    if (url) return url;
-    return await placePhotoURL(); // fallback
+  // Choose branch once
+  const useStreet = Math.random() < 0.5;
+  let url;
+  if (useStreet) {
+    console.log("Trying Street View first.");
+    url = await streetViewURL();
+    if (!url) {
+      console.log("Street View failed; falling back to Place Photo.");
+      url = await placePhotoURL();
+    }
   } else {
-    const url = await placePhotoURL();
-    if (url) return url;
-    return await streetViewURL(); // fallback
+    console.log("Trying Place Photo first.");
+    url = await placePhotoURL();
+    if (!url) {
+      console.log("Place Photo failed; falling back to Street View.");
+      url = await streetViewURL();
+    }
   }
+  return url;
 }
 
-// App state
+// ----- App State and Navigation Logic -----
 let links = [];
 let currentIndex = -1;
 let historyStack = [];
@@ -149,6 +194,7 @@ forwardBtn.addEventListener('click', () => {
 });
 
 function preloadForwardImages() {
+  // Rebuild the forward stack with new preloaded images
   forwardStack = [];
   for (let i = 0; i < maxPreload; i++) {
     generateImageURL().then(url => {
@@ -166,8 +212,8 @@ function preloadForwardImages() {
   }
 }
 
+// ----- On-load: Preload 5 images -----
 (async () => {
-  // Preload 5 images on load
   for (let i = 0; i < 5; i++) {
     const url = await generateImageURL();
     if (url) links.push(url);
