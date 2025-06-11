@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Random Image Navigator</title>
+  <style>
+    body {
+      margin: 0; padding: 0;
+      background: #000;
+      color: #fff;
+      font-family: sans-serif;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      overflow: hidden;
+    }
+    img {
+      max-width: 90vw;
+      max-height: 90vh;
+      border: 3px solid #fff;
+      border-radius: 8px;
+    }
+    button {
+      position: fixed;
+      bottom: 20px;
+      font-size: 3em;
+      padding: 0.1em 0.3em;
+      cursor: pointer;
+      border-radius: 5px;
+      border: none;
+      background: rgba(30,30,30,0.8);
+      color: #fff;
+      user-select: none;
+      transition: background 0.3s;
+      z-index: 1000;
+      touch-action: manipulation;
+    }
+    button:disabled {
+      opacity: 0.3;
+      cursor: default;
+    }
+    button:hover:not(:disabled) {
+      background: rgba(70,70,70,0.9);
+    }
+    #backBtn {
+      left: 20px;
+    }
+    #forwardBtn {
+      right: 20px;
+    }
+  </style>
+</head>
+<body>
+
+<img id="mainImage" src="" alt="Random Image" />
+<button id="backBtn" disabled aria-label="Previous image">&lt;</button>
+<button id="forwardBtn" disabled aria-label="Next image">&gt;</button>
+
+<script>
+const API_TOKEN = 'MLY|9928574010570605|8152b5143f1d2deb471cb1cba6198959';
+const CITIES = {
+  'Tokyo': [139.55, 35.50, 139.90, 35.80],
+  'Paris': [2.25, 48.80, 2.45, 48.90],
+  'New York': [-74.05, 40.70, -73.85, 40.85],
+  'Seoul': [126.90, 37.50, 127.10, 37.60],
+  'London': [-0.20, 51.45, 0.10, 51.55],
+};
+
+let links = [];
+let currentIndex = -1;
+let historyStack = [];
+let forwardStack = [];
+const maxHistory = 3;
+const maxPreload = 5;
+
+const imgElement = document.getElementById('mainImage');
+const backBtn = document.getElementById('backBtn');
+const forwardBtn = document.getElementById('forwardBtn');
+
+function getRandomCityBBox() {
+  const keys = Object.keys(CITIES);
+  const city = keys[Math.floor(Math.random() * keys.length)];
+  return CITIES[city];
+}
+
+async function fetchRandomImage() {
+  const bbox = getRandomCityBBox();
+  const url = `https://graph.mapillary.com/images?access_token=${API_TOKEN}&fields=thumb_1024_url&bbox=${bbox.join(',')}&is_pano=false&limit=1`;
+  const res = await fetch(url);
+  const data = await res.json();
+  return data.data?.[0]?.thumb_1024_url || null;
+}
+
+async function preloadForwardImages() {
+  forwardStack = [];
+  let preloadCount = 0;
+  while (preloadCount < maxPreload) {
+    const link = await fetchRandomImage();
+    if (link && !links.includes(link)) {
+      links.push(link);
+      forwardStack.push(links.length - 1);
+      preloadCount++;
+    }
+  }
+  updateButtons();
+}
+
+function updateButtons() {
+  backBtn.disabled = historyStack.length === 0;
+  forwardBtn.disabled = forwardStack.length === 0;
+}
+
+function showImage(index) {
+  currentIndex = index;
+  imgElement.src = links[currentIndex];
+  imgElement.alt = `Image ${currentIndex + 1}`;
+  updateButtons();
+}
+
+backBtn.addEventListener('click', () => {
+  if (historyStack.length > 0) {
+    forwardStack.unshift(currentIndex);
+    if (forwardStack.length > maxPreload) forwardStack.pop();
+    const prevIndex = historyStack.pop();
+    showImage(prevIndex);
+  }
+});
+
+forwardBtn.addEventListener('click', async () => {
+  if (forwardStack.length > 0) {
+    historyStack.push(currentIndex);
+    if (historyStack.length > maxHistory) historyStack.shift();
+    const nextIndex = forwardStack.shift();
+    showImage(nextIndex);
+
+    // Start preloading next
+    const newLink = await fetchRandomImage();
+    if (newLink && !links.includes(newLink)) {
+      links.push(newLink);
+      forwardStack.push(links.length - 1);
+    }
+    updateButtons();
+  }
+});
+
+(async () => {
+  await preloadForwardImages();
+  if (forwardStack.length > 0) {
+    showImage(forwardStack.shift());
+  } else {
+    imgElement.alt = "No images available.";
+  }
+})();
+</script>
+
+</body>
+</html>
